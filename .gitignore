@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+env/
+venv/
+.venv/
+.idea/
+.vscode/
+.streamlit/secrets.toml
+credentials.json

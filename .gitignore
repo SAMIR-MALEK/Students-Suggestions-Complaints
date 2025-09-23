@@ -9,3 +9,4 @@ venv/
 .vscode/
 .streamlit/secrets.toml
 credentials.json
+service_account.json

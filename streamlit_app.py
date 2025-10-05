@@ -9,22 +9,20 @@ st.set_page_config(page_title="منصة الاقتراحات والشكاوى", 
 st.title("📝 منصة الاقتراحات والشكاوى للطلبة")
 st.write("مرحبًا بك — الرجاء إدخال سنة البكالوريا ورقم التسجيل للتحقق ثم متابعة إرسال الشكوى/الاقتراح.")
 
-# --------- ثوابت (IDs) ----------
+# --------- معرفات Google Sheets ----------
 STUDENTS_SHEET_ID = "1qDdqUC6TA6gNNVSbauLg_Un22vcgjjPB8kJitXa6qBo"   # قائمة الطلبة
 SUGGESTIONS_SHEET_ID = "1z_OgVfrJQew28gf41Hck0uG1syH2mttJcOf6JodqdIU"  # شكاوى واقتراحات
 
 STUDENTS_SHEET_NAME = "قائمة الطلبة"
 SUGGESTIONS_SHEET_NAME = "شكاوى واقتراحات"
 
-# --------- دالة الاتصال بـ Google Sheets ----------
+# --------- الاتصال بـ Google Sheets ----------
 @st.cache_resource
 def get_gspread_client():
     scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-
-    # 1️⃣ محاولة قراءة بيانات الخدمة من streamlit secrets (كتابة مباشرة)
     try:
         info = st.secrets["google_service_account"]
         creds = Credentials.from_service_account_info(info, scopes=scopes)
@@ -32,7 +30,6 @@ def get_gspread_client():
     except Exception:
         pass
 
-    # 2️⃣ أو من GOOGLE_CREDENTIALS كنص JSON
     try:
         raw = st.secrets["GOOGLE_CREDENTIALS"]
         if isinstance(raw, str):
@@ -53,9 +50,9 @@ if not st.session_state["student_found"]:
     with st.form("verify_form"):
         col1, col2 = st.columns(2)
         with col1:
-            année_bac = st.text_input("سنة البكالوريا (AnnéeBAC)", placeholder="مثال: 2023")
+            année_bac = st.text_input("📅 سنة البكالوريا (AnnéeBAC)", placeholder="مثال: 2023")
         with col2:
-            mat_bac = st.text_input("رقم التسجيل (MatBAC)", placeholder="مثال: 123456789")
+            mat_bac = st.text_input("🔢 رقم التسجيل (MatBAC)", placeholder="مثال: 123456789")
         verify_clicked = st.form_submit_button("🔎 تحقق")
 
     if verify_clicked:
@@ -68,11 +65,11 @@ if not st.session_state["student_found"]:
                 worksheet = sheet.worksheet(STUDENTS_SHEET_NAME)
                 all_values = worksheet.get_all_records()
 
-                student_record = None
-                for row in all_values:
-                    if str(row.get("AnnéeBAC", "")).strip() == str(année_bac).strip() and str(row.get("MatBAC", "")).strip() == str(mat_bac).strip():
-                        student_record = row
-                        break
+                student_record = next(
+                    (row for row in all_values if str(row.get("AnnéeBAC", "")).strip() == str(année_bac).strip() 
+                     and str(row.get("MatBAC", "")).strip() == str(mat_bac).strip()), 
+                    None
+                )
 
                 if student_record:
                     st.session_state["student_found"] = True
@@ -80,7 +77,7 @@ if not st.session_state["student_found"]:
                     st.session_state["année_bac"] = année_bac
                     st.session_state["mat_bac"] = mat_bac
                     st.success(f"✅ مرحبًا {student_record.get('Nom','')} {student_record.get('Prénom','')} — تم التحقق بنجاح.")
-                    st.rerun()
+                    st.rerun()  # ← هذا الآن هو الدالة الصحيحة في Streamlit
                 else:
                     st.error("⚠️ لم يتم العثور على بياناتك. تأكد من صحة المعلومات.")
             except Exception as e:
@@ -101,10 +98,10 @@ if st.session_state["student_found"]:
     specialite = student_record.get("specialité", "")
 
     with st.form("msg_form"):
-        st.text_input("اللقب (Nom)", value=nom, key="nom")
-        st.text_input("الاسم (Prénom)", value=prenom, key="prenom")
-        st.text_input("السنة (Année)", value=annee, key="annee")
-        st.text_input("التخصص (specialité)", value=specialite, key="specialite")
+        st.text_input("👤 اللقب (Nom)", value=nom, key="nom")
+        st.text_input("👤 الاسم (Prénom)", value=prenom, key="prenom")
+        st.text_input("📚 السنة (Année)", value=annee, key="annee")
+        st.text_input("🏷️ التخصص (specialité)", value=specialite, key="specialite")
         email = st.text_input("📧 البريد الإلكتروني (اختياري)")
         type_choice = st.selectbox("📌 نوع الرسالة:", ["اقتراح", "شكوى", "استفسار"])
         message = st.text_area("✍️ نص الرسالة:")
@@ -132,11 +129,14 @@ if st.session_state["student_found"]:
                     type_choice,
                     message
                 ]
+
                 worksheet.append_row(row_values, value_input_option="RAW")
                 st.success("✅ تم إرسال رسالتك وحفظها بنجاح 🎉")
 
-                # إعادة التهيئة بعد الإرسال (اختياري)
-                st.session_state["student_found"] = False
-                st.experimental_rerun()
+                # إعادة تعيين الحالة بعد الإرسال
+                for key in ["student_found", "student_record", "année_bac", "mat_bac"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
             except Exception as e:
                 st.error(f"❌ حدث خطأ أثناء حفظ الرسالة: {e}")

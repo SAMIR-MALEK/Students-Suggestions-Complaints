@@ -4,6 +4,7 @@ from datetime import datetime
 import gspread
 from google.oauth2.service_account import Credentials
 import json
+import time
 
 st.set_page_config(page_title="منصة الاقتراحات والشكاوى", page_icon="📝", layout="centered")
 st.title("📝 منصة الاقتراحات والشكاوى للطلبة")
@@ -77,7 +78,7 @@ if not st.session_state["student_found"]:
                     st.session_state["année_bac"] = année_bac
                     st.session_state["mat_bac"] = mat_bac
                     st.success(f"✅ مرحبًا {student_record.get('Nom','')} {student_record.get('Prénom','')} — تم التحقق بنجاح.")
-                    st.rerun()  # ← هذا الآن هو الدالة الصحيحة في Streamlit
+                    st.rerun()
                 else:
                     st.error("⚠️ لم يتم العثور على بياناتك. تأكد من صحة المعلومات.")
             except Exception as e:
@@ -131,12 +132,16 @@ if st.session_state["student_found"]:
                 ]
 
                 worksheet.append_row(row_values, value_input_option="RAW")
-                st.success("✅ تم إرسال رسالتك وحفظها بنجاح 🎉")
 
-                # إعادة تعيين الحالة بعد الإرسال
+                # ✅ عرض رسالة تأكيد قبل العودة
+                st.success("✅ شكرا لك! لقد تم إرسال انشغالك بنجاح وسيتم الاطلاع عليه ومعالجته في أقرب وقت ممكن. 👏")
+                st.info("🔄 سيتم إعادتك إلى صفحة إدخال معلومات الطالب خلال 4 ثوانٍ...")
+
+                time.sleep(4)  # ← ننتظر 4 ثوانٍ
                 for key in ["student_found", "student_record", "année_bac", "mat_bac"]:
                     if key in st.session_state:
                         del st.session_state[key]
                 st.rerun()
+
             except Exception as e:
                 st.error(f"❌ حدث خطأ أثناء حفظ الرسالة: {e}")

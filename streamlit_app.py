@@ -1,112 +1,147 @@
-st.markdown("""
-<style>
-/* الخط */
-@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+# -*- coding: utf-8 -*-
+import streamlit as st
+from datetime import datetime
+import gspread
+from google.oauth2.service_account import Credentials
+import json
+import time
 
-html, body, [class*="css"] {
-    font-family: 'Cairo', sans-serif;
-}
+st.set_page_config(page_title="منصة الاقتراحات والشكاوى", page_icon="📝", layout="centered")
+st.title("📝 منصة الاقتراحات والشكاوى للطلبة")
+st.write("مرحبًا بك — الرجاء إدخال سنة البكالوريا ورقم التسجيل للتحقق ثم متابعة إرسال الشكوى/الاقتراح.")
 
-/* خلفية الصفحة */
-.stApp {
-    background: linear-gradient(180deg, #031028 0%, #071a30 100%);
-    color: #f5f8ff;
-    min-height: 100vh;
-    padding: 28px 36px;
-}
+# --------- معرفات Google Sheets ----------
+STUDENTS_SHEET_ID = "1qDdqUC6TA6gNNVSbauLg_Un22vcgjjPB8kJitXa6qBo"   # قائمة الطلبة
+SUGGESTIONS_SHEET_ID = "1z_OgVfrJQew28gf41Hck0uG1syH2mttJcOf6JodqdIU"  # شكاوى واقتراحات
 
-/* حاوية المحتوى */
-.container-wide {
-    max-width: 1200px;
-    margin: 0 auto;
-}
+STUDENTS_SHEET_NAME = "قائمة الطلبة"
+SUGGESTIONS_SHEET_NAME = "شكاوى واقتراحات"
 
-/* بانر العنوان */
-.top-banner {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 14px 18px;
-    border-radius: 12px;
-    background: linear-gradient(90deg, rgba(255,204,0,0.05), rgba(255,204,0,0.02));
-    border: 1px solid rgba(255,204,0,0.06);
-    margin-bottom: 18px;
-}
-.top-banner img {
-    height: 56px;
-    width: 56px;
-    object-fit: contain;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.04);
-    padding: 6px;
-}
-.top-banner .title {
-    font-size: 20px;
-    font-weight: 700;
-    color: #ffd966;
-}
-.top-banner .subtitle {
-    font-size: 13px;
-    color: #d6eaff;
-    opacity: 0.95;
-    margin-top: 4px;
-}
+# --------- الاتصال بـ Google Sheets ----------
+@st.cache_resource
+def get_gspread_client():
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ]
+    try:
+        info = st.secrets["google_service_account"]
+        creds = Credentials.from_service_account_info(info, scopes=scopes)
+        return gspread.authorize(creds)
+    except Exception:
+        pass
 
-/* البطاقة */
-.card {
-    background: #eef5fb;
-    color: #071022;
-    border-radius: 14px;
-    padding: 22px;
-    box-shadow: 0 12px 36px rgba(2,6,23,0.45);
-    border: 1px solid rgba(7,16,37,0.06);
-    margin-bottom: 24px;
-}
+    try:
+        raw = st.secrets["GOOGLE_CREDENTIALS"]
+        if isinstance(raw, str):
+            info = json.loads(raw)
+        else:
+            info = raw
+        creds = Credentials.from_service_account_info(info, scopes=scopes)
+        return gspread.authorize(creds)
+    except Exception as e:
+        raise RuntimeError("❌ لم أستطع قراءة بيانات الاعتماد. تأكد من إعداد GOOGLE_CREDENTIALS في Secrets.") from e
 
-/* عناوين البطاقة */
-.card h2 {
-    margin: 0 0 8px 0;
-    color: #ffcc00;
-    font-size: 20px;
-}
-.card p.lead {
-    margin: 0 0 14px 0;
-    color: #08304f;
-    opacity: 0.95;
-}
 
-/* الحقول */
-.card .stTextInput>div>div>input,
-.card .stTextArea>div>div>textarea,
-.card .stSelectbox>div>div>div[role="combobox"] {
-    background: #ffffff !important;
-    color: #071022 !important;
-    border: 1px solid rgba(7,16,37,0.08) !important;
-    border-radius: 10px !important;
-    padding: 10px 12px !important;
-}
+# --------- خطوة التحقق من الطالب ----------
+if "student_found" not in st.session_state:
+    st.session_state["student_found"] = False
 
-/* الأزرار */
-.stButton > button {
-    background: linear-gradient(180deg, #ffd24d 0%, #ffb400 100%) !important;
-    color: #071022 !important;
-    font-weight: 700 !important;
-    border: none !important;
-    padding: 10px 18px !important;
-    border-radius: 10px !important;
-    box-shadow: 0 8px 20px rgba(255,180,40,0.12) !important;
-}
-.stButton > button:hover {
-    transform: translateY(-2px);
-}
+if not st.session_state["student_found"]:
+    with st.form("verify_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            année_bac = st.text_input("📅 سنة البكالوريا (AnnéeBAC)", placeholder="مثال: 2023")
+        with col2:
+            mat_bac = st.text_input("🔢 رقم التسجيل (MatBAC)", placeholder="مثال: 123456789")
+        verify_clicked = st.form_submit_button("🔎 تحقق")
 
-/* الأعمدة */
-@media (min-width: 1000px) {
-    .two-cols {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-    }
-}
-</style>
-""", unsafe_allow_html=True)
+    if verify_clicked:
+        if not année_bac or not mat_bac:
+            st.warning("⚠️ الرجاء إدخال سنة البكالوريا ورقم التسجيل.")
+        else:
+            try:
+                client = get_gspread_client()
+                sheet = client.open_by_key(STUDENTS_SHEET_ID)
+                worksheet = sheet.worksheet(STUDENTS_SHEET_NAME)
+                all_values = worksheet.get_all_records()
+
+                student_record = next(
+                    (row for row in all_values if str(row.get("AnnéeBAC", "")).strip() == str(année_bac).strip() 
+                     and str(row.get("MatBAC", "")).strip() == str(mat_bac).strip()), 
+                    None
+                )
+
+                if student_record:
+                    st.session_state["student_found"] = True
+                    st.session_state["student_record"] = student_record
+                    st.session_state["année_bac"] = année_bac
+                    st.session_state["mat_bac"] = mat_bac
+                    st.success(f"✅ مرحبًا {student_record.get('Nom','')} {student_record.get('Prénom','')} — تم التحقق بنجاح.")
+                    st.rerun()
+                else:
+                    st.error("⚠️ لم يتم العثور على بياناتك. تأكد من صحة المعلومات.")
+            except Exception as e:
+                st.error(f"❌ حدث خطأ أثناء التحقق: {e}")
+
+# --------- إذا تم التحقق، عرض نموذج الشكوى ----------
+if st.session_state["student_found"]:
+    student_record = st.session_state["student_record"]
+    année_bac = st.session_state["année_bac"]
+    mat_bac = st.session_state["mat_bac"]
+
+    st.markdown("---")
+    st.subheader("📨 استمارة الشكاوى والاقتراحات")
+
+    nom = student_record.get("Nom", "")
+    prenom = student_record.get("Prénom", "")
+    annee = student_record.get("Année", "")
+    specialite = student_record.get("specialité", "")
+
+    with st.form("msg_form"):
+        st.text_input("👤 اللقب (Nom)", value=nom, key="nom")
+        st.text_input("👤 الاسم (Prénom)", value=prenom, key="prenom")
+        st.text_input("📚 السنة (Année)", value=annee, key="annee")
+        st.text_input("🏷️ التخصص (specialité)", value=specialite, key="specialite")
+        email = st.text_input("📧 البريد الإلكتروني (اختياري)")
+        type_choice = st.selectbox("📌 نوع الرسالة:", ["اقتراح", "شكوى", "استفسار"])
+        message = st.text_area("✍️ نص الرسالة:")
+        send_clicked = st.form_submit_button("📤 إرسال")
+
+    if send_clicked:
+        if not message.strip():
+            st.warning("⚠️ الرجاء كتابة نص الرسالة.")
+        else:
+            try:
+                client = get_gspread_client()
+                sheet = client.open_by_key(SUGGESTIONS_SHEET_ID)
+                worksheet = sheet.worksheet(SUGGESTIONS_SHEET_NAME)
+
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                row_values = [
+                    année_bac,
+                    mat_bac,
+                    st.session_state.get("nom", nom),
+                    st.session_state.get("prenom", prenom),
+                    st.session_state.get("annee", annee),
+                    st.session_state.get("specialite", specialite),
+                    now,
+                    email,
+                    type_choice,
+                    message
+                ]
+
+                worksheet.append_row(row_values, value_input_option="RAW")
+
+                # ✅ عرض رسالة تأكيد قبل العودة
+                st.success("✅ شكرا لك! لقد تم إرسال انشغالك بنجاح وسيتم الاطلاع عليه ومعالجته في أقرب وقت ممكن. 👏")
+                st.info("🔄 سيتم إعادتك إلى صفحة إدخال معلومات الطالب خلال 4 ثوانٍ...")
+
+                time.sleep(4)  # ← ننتظر 4 ثوانٍ
+                for key in ["student_found", "student_record", "année_bac", "mat_bac"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"❌ حدث خطأ أثناء حفظ الرسالة: {e}")
